@@ -11,4 +11,7 @@ This app is a simple, ad-free alternative for those who need a basic warning lig
 - No ads
 - Lightweight and easy to use
 
+## Download
+You can download it [here](https://github.com/daniloercoli/WarningLight/releases/tag/v1.0).
+
 Feel free to use and modify this app as needed. Contributions and suggestions are welcome!
