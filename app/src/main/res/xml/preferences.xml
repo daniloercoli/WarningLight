@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <com.daniloercoli.warninglight.ColorPickerPreference
+        app:key="blink_color"
+        app:title="Blink Color"
+        app:defaultValue="#FF0000"/>
+
+    <EditTextPreference
+        app:key="blink_interval"
+        app:title="Blink Interval"
+        app:defaultValue="900"
+        app:useSimpleSummaryProvider="false"
+        app:layout="@layout/preference_single_line" />
+
+</PreferenceScreen>
