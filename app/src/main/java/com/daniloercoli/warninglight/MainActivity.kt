@@ -1,18 +1,19 @@
 package com.daniloercoli.warninglight
 
-// MainActivity.kt
 import android.animation.ValueAnimator
-import android.app.KeyguardManager
-import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -21,10 +22,13 @@ import androidx.preference.PreferenceManager
 class MainActivity : AppCompatActivity() {
     private lateinit var blinkingView: View
     private lateinit var blinkAnimator: ValueAnimator
-    private var blinkColor: Int = Color.RED  // Define blinkColor at class level with a default value
+    private var blinkColor: Int =
+        Color.RED  // Define blinkColor at class level with a default value
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        ensureNotificationsThenStartService()
 
         // Configura la finestra per rimanere sopra la schermata di blocco
         setupWindowFlags()
@@ -39,38 +43,38 @@ class MainActivity : AppCompatActivity() {
 
         // Hide system UI
         hideSystemUI()
+
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : androidx.activity.OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    showExitDialog()
+                }
+            })
     }
 
     private fun setupWindowFlags() {
-        // Mantiene lo schermo acceso
+        // Evita lo spegnimento per timeout mentre l’activity è visibile
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
-
-            // Per Android 8.0+, gestisci il KeyguardManager
-            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-            keyguardManager.requestDismissKeyguard(this, null)
         } else {
-            // Per versioni precedenti di Android
             @Suppress("DEPRECATION")
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                        WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
         }
-
-        // Opzionale: mantiene l'app in primo piano anche con altre notifiche
-        window.addFlags(WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON)
     }
 
     private fun hideSystemUI() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).let { controller ->
             controller.hide(WindowInsetsCompat.Type.systemBars())
-            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
     }
 
@@ -101,7 +105,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateBlinkingViewSettings() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        blinkColor = prefs.getString("blink_color", "#FF0000")?.let { Color.parseColor(it) } ?: Color.RED
+        blinkColor =
+            prefs.getString("blink_color", "#FF0000")?.let { Color.parseColor(it) } ?: Color.RED
         val interval = prefs.getString("blink_interval", "900")?.toLongOrNull() ?: 900L
 
         blinkAnimator.duration = interval
@@ -119,10 +124,12 @@ class MainActivity : AppCompatActivity() {
                 startActivity(Intent(this, SettingsActivity::class.java))
                 true
             }
+
             R.id.action_about -> {
                 startActivity(Intent(this, AboutActivity::class.java))
                 true
             }
+
             else -> super.onOptionsItemSelected(item)
         }
     }
@@ -143,4 +150,57 @@ class MainActivity : AppCompatActivity() {
             )
         }
     }
+
+    private fun ensureNotificationsThenStartService() { // <-- nuovo
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ActivityCompat.checkSelfPermission(
+                this, android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+            if (granted) {
+                // anche le notifiche di sistema dell’app devono essere attive
+                if (NotificationManagerCompat.from(this).areNotificationsEnabled()) {
+                    startWarningService()
+                } else {
+                    // porta l’utente alle impostazioni se ha disattivato le notifiche
+                    openNotificationSettings()
+                }
+            } else {
+                ActivityCompat.requestPermissions(
+                    this, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1001
+                )
+            }
+        } else {
+            startWarningService()
+        }
+    }
+
+    private fun startWarningService() {
+        ContextCompat.startForegroundService(
+            this, Intent(this, WarningForegroundService::class.java)
+        )
+    }
+
+    private fun openNotificationSettings() {
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        }
+        startActivity(intent)
+    }
+
+    private fun showExitDialog() {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(getString(R.string.app_name))
+            .setMessage("Vuoi chiudere davvero l'app?")
+            .setPositiveButton("Chiudi") { _, _ ->
+                // 1) Ferma il ForegroundService (e quindi la notifica full-screen)
+                stopService(Intent(this, WarningForegroundService::class.java))
+                // 2) Chiudi davvero l’app rimuovendo il task dallo switcher
+                finishAndRemoveTask()
+            }
+            .setNegativeButton("Annulla", null)
+            .setCancelable(true)
+            .show()
+    }
+
 }
