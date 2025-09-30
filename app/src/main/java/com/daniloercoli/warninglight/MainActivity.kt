@@ -2,12 +2,16 @@ package com.daniloercoli.warninglight
 
 // MainActivity.kt
 import android.animation.ValueAnimator
+import android.app.KeyguardManager
+import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -21,6 +25,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Configura la finestra per rimanere sopra la schermata di blocco
+        setupWindowFlags()
+
         setContentView(R.layout.activity_main)
 
         blinkingView = findViewById(R.id.blinkingView)
@@ -31,6 +39,31 @@ class MainActivity : AppCompatActivity() {
 
         // Hide system UI
         hideSystemUI()
+    }
+
+    private fun setupWindowFlags() {
+        // Mantiene lo schermo acceso
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+
+            // Per Android 8.0+, gestisci il KeyguardManager
+            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            keyguardManager.requestDismissKeyguard(this, null)
+        } else {
+            // Per versioni precedenti di Android
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                        WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+            )
+        }
+
+        // Opzionale: mantiene l'app in primo piano anche con altre notifiche
+        window.addFlags(WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON)
     }
 
     private fun hideSystemUI() {
@@ -45,6 +78,9 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         updateBlinkingViewSettings()
         hideSystemUI()
+
+        // Riapplica i flag della finestra quando l'app torna in primo piano
+        setupWindowFlags()
     }
 
     private fun setupBlinkingAnimation() {
@@ -88,6 +124,23 @@ class MainActivity : AppCompatActivity() {
                 true
             }
             else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Pulisci i flag quando l'activity viene distrutta
+        window.clearFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
+        )
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) {
+            @Suppress("DEPRECATION")
+            window.clearFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                        WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+            )
         }
     }
 }
