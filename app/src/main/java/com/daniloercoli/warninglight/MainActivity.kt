@@ -85,6 +85,9 @@ class MainActivity : AppCompatActivity() {
 
         // Riapplica i flag della finestra quando l'app torna in primo piano
         setupWindowFlags()
+
+        val nm = NotificationManagerCompat.from(this)
+        nm.cancel(WarningForegroundService.WAKE_ID) // WAKE_ID
     }
 
     private fun setupBlinkingAnimation() {
